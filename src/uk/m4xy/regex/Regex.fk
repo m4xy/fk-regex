@@ -1,0 +1,3 @@
+// A pattern, compiled, ready to match: made by Regexes.regex, or String.toRegex(). It has the
+// pattern as written, and programs to search a text with and to match a whole text with.
+type Regex private(pattern: String, search: Program, whole: Program)

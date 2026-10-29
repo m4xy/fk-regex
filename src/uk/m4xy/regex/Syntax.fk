@@ -1,0 +1,290 @@
+import fckt.collections.Array
+import fckt.collections.Arrays.*
+
+// Reading a pattern, by recursive descent:
+//
+//   choice    = sequence ('|' sequence)*
+//   sequence  = repeated*
+//   repeated  = atom ('*' | '+' | '?' | '{n}' | '{n,}' | '{n,m}') '?'?
+//   atom      = '(' choice ')' | '(?:' choice ')' | '[' class ']' | '.' | '^' | '$' | '\' escape
+//             | any other character
+//
+// (?i) at the start makes the pattern ignore the case of the letters A to Z.
+module Syntax {
+  parse(pattern: String): Result<Pattern, RegexError> = {
+    r = Reading(pattern.toList().toArray(), 0, 0)
+    Rejecting(reject = (at, message, _) -> Error(RegexError(at, message))) {
+      ignoreCase = accepts(r, "(?i)")
+      node = choice(r)
+      if (r.index < r.chars.size) reject(r.index, "'${current(r)}' isn't matched by anything before it")
+      else Ok(Pattern(node, r.groups, ignoreCase))
+    }
+  }
+
+  // How far reading has got: the pattern's characters, the next one's index, and how many groups
+  // have been numbered.
+  private type Reading(chars: Array<Char>, var index: Int, var groups: Int)
+
+  // The next character; only asked where there is one.
+  private current(r: Reading): Char = r.chars.get(r.index)
+
+  private atEnd(r: Reading): Boolean = r.index >= r.chars.size
+
+  private looking(r: Reading, c: Char): Boolean = !atEnd(r) && current(r) == c
+
+  // Whether the text is next, reading past it if it is.
+  @Mutating private accepts(r: Reading, text: String): Boolean = {
+    chars = text.toList()
+    matches = chars.withIndex().all { i, c -> r.index + i < r.chars.size && r.chars.get(r.index + i) == c }
+    if (matches) {
+      r.index = r.index + chars.size
+      true
+    } else false
+  }
+
+  @Mutating private next(r: Reading): Char = {
+    c = current(r)
+    r.index = r.index + 1
+    c
+  }
+
+  // ---- Choices and sequences ----
+
+  @Rejecting @Mutating private choice(r: Reading): Node = {
+    first = sequence(r)
+    alternatives = moreAlternatives(r, [first])
+    when (alternatives) {
+      [only] -> only
+      _ -> Choice(alternatives)
+    }
+  }
+
+  @Rejecting @Mutating private moreAlternatives(r: Reading, found: List<Node>): List<Node> =
+    if (looking(r, '|')) {
+      next(r)
+      moreAlternatives(r, found + [sequence(r)])
+    } else found
+
+  @Rejecting @Mutating private sequence(r: Reading): Node = when (items(r, [])) {
+    [] -> Empty
+    [only] -> only
+    nodes -> Sequence(nodes)
+  }
+
+  @Rejecting @Mutating private items(r: Reading, found: List<Node>): List<Node> =
+    if (atEnd(r) || looking(r, '|') || looking(r, ')')) found
+    else items(r, found + [repeated(r)])
+
+  // ---- Repeats ----
+
+  @Rejecting @Mutating private repeated(r: Reading): Node = {
+    at = r.index
+    node = atom(r)
+    quantified(r, node, at)
+  }
+
+  @Rejecting @Mutating private quantified(r: Reading, node: Node, at: Int): Node = {
+    bounds = if (atEnd(r)) None else when (current(r)) {
+      '*' -> {
+        next(r)
+        Some((0, None))
+      }
+      '+' -> {
+        next(r)
+        Some((1, None))
+      }
+      '?' -> {
+        next(r)
+        Some((0, Some(1)))
+      }
+      '{' -> counted(r)
+      _ -> None
+    }
+    when (bounds) {
+      None -> node
+      Some((min, max)) -> {
+        when (node) {
+          Assert(_) -> reject(at, "an anchor matches no characters, so it can't be repeated")
+          Empty -> reject(at, "there's nothing before it to repeat")
+          _ -> Unit
+        }
+        greedy = !accepts(r, "?")
+        repeat = Repeat(node, min, max, greedy)
+        // x** and the like say nothing x* doesn't, but are surely a mistake.
+        if (!atEnd(r) && (current(r) == '*' || current(r) == '+' || current(r) == '?' || current(r) == '{')) {
+          reject(r.index, "'${current(r)}' repeats a repeat; group it first, as in (x*)+")
+        } else repeat
+      }
+    }
+  }
+
+  // {n}, {n,} or {n,m}; a { that starts none of them is just a {.
+  @Rejecting @Mutating private counted(r: Reading): Option<(Int, Option<Int>)> = {
+    start = r.index
+    next(r)
+    min = number(r)
+    result = when (min) {
+      None -> None
+      Some(n) ->
+        if (accepts(r, "}")) Some((n, Some(n)))
+        else if (accepts(r, ",}")) Some((n, None))
+        else if (accepts(r, ",")) when (number(r)) {
+          Some(m) if accepts(r, "}") ->
+            if (m < n) reject(start, "{$n,$m} wants at least $n but at most $m") else Some((n, Some(m)))
+          _ -> None
+        }
+        else None
+    }
+    // Not a count: read it as the characters it is.
+    if (result.isNone()) {
+      r.index = start
+    }
+    result
+  }
+
+  // The digits next, as a number, if there are any.
+  @Mutating private number(r: Reading): Option<Int> = digits(r, None)
+
+  @Mutating private digits(r: Reading, found: Option<Int>): Option<Int> =
+    if (!atEnd(r) && current(r).isDigit()) {
+      d = next(r).code - '0'.code
+      digits(r, Some(found.getOrElse(0) * 10 + d))
+    } else found
+
+  // ---- Atoms ----
+
+  @Rejecting @Mutating private atom(r: Reading): Node = {
+    at = r.index
+    when (next(r)) {
+      '(' -> group(r, at)
+      '[' -> characterClass(r, at)
+      '.' -> AnyCharacter
+      '^' -> Assert(TextStart)
+      '$' -> Assert(TextEnd)
+      '\\' -> escape(r, at, false)
+      '*' -> reject(at, "'*' has nothing before it to repeat")
+      '+' -> reject(at, "'+' has nothing before it to repeat")
+      '?' -> reject(at, "'?' has nothing before it to repeat")
+      c -> Literal(c)
+    }
+  }
+
+  @Rejecting @Mutating private group(r: Reading, at: Int): Node = {
+    number = if (accepts(r, "?:")) None else {
+      if (looking(r, '?')) reject(r.index, "only (?:...) and (?i) at the start are understood after (?") else Unit
+      r.groups = r.groups + 1
+      Some(r.groups)
+    }
+    inside = choice(r)
+    if (!accepts(r, ")")) reject(at, "this ( is never closed") else Unit
+    Group(number, inside)
+  }
+
+  // ---- Escapes ----
+
+  // What follows a \: a class of characters, \d \w \s and their opposites, an anchor, \b \B, a
+  // control character, \n \t \r \f \v \0, a code point, \u{1F600}, or the character itself, for one
+  // the pattern otherwise gives a meaning to. Inside a class, \b is a backspace.
+  @Rejecting @Mutating private escape(r: Reading, at: Int, inClass: Boolean): Node = {
+    if (atEnd(r)) reject(at, "a pattern can't end with \\") else Unit
+    c = next(r)
+    when (c) {
+      'd' -> CharacterClass(digitRanges, false)
+      'D' -> CharacterClass(digitRanges, true)
+      'w' -> CharacterClass(wordRanges, false)
+      'W' -> CharacterClass(wordRanges, true)
+      's' -> CharacterClass(spaceRanges, false)
+      'S' -> CharacterClass(spaceRanges, true)
+      'b' -> if (inClass) Literal(8.toChar()) else Assert(WordBoundary)
+      'B' -> if (inClass) reject(at, "\\B means nothing in a class") else Assert(NotWordBoundary)
+      'n' -> Literal('\n')
+      't' -> Literal('\t')
+      'r' -> Literal('\r')
+      'f' -> Literal(12.toChar())
+      'v' -> Literal(11.toChar())
+      '0' -> Literal(0.toChar())
+      'u' -> Literal(codePoint(r, at))
+      _ ->
+        if (c.isLetterOrDigit()) reject(at, "\\$c means nothing here; write $c alone for the letter")
+        else Literal(c)
+    }
+  }
+
+  // \u{1F600}: a character by its code point, in hexadecimal.
+  @Rejecting @Mutating private codePoint(r: Reading, at: Int): Char = {
+    if (!accepts(r, "{")) reject(at, "\\u is followed by a code point in braces, as in \\u{1F600}") else Unit
+    value = hexDigits(r, None)
+    if (!accepts(r, "}")) reject(at, "\\u{...} holds only hexadecimal digits") else Unit
+    when (value) {
+      Some(n) if n <= 1114111 -> n.toChar()
+      _ -> reject(at, "\\u{...} needs a code point, from 0 to 10FFFF")
+    }
+  }
+
+  @Mutating private hexDigits(r: Reading, found: Option<Int>): Option<Int> =
+    if (atEnd(r)) found
+    else when (hexValue(current(r))) {
+      Some(d) -> {
+        next(r)
+        hexDigits(r, Some(found.getOrElse(0) * 16 + d))
+      }
+      None -> found
+    }
+
+  private hexValue(c: Char): Option<Int> =
+    if (c.isDigit()) Some(c.code - '0'.code)
+    else if (c >= 'a' && c <= 'f') Some(c.code - 'a'.code + 10)
+    else if (c >= 'A' && c <= 'F') Some(c.code - 'A'.code + 10)
+    else None
+
+  // The characters \d, \w and \s match.
+  digitRanges: List<CharRange> = [CharRange('0', '9')]
+  wordRanges: List<CharRange> = [CharRange('a', 'z'), CharRange('A', 'Z'), CharRange('0', '9'), CharRange('_', '_')]
+  spaceRanges: List<CharRange> = [CharRange(' ', ' '), CharRange('\t', '\r')]
+
+  // ---- Classes ----
+
+  // [abc], [a-z], [^0-9], [\w-], with ] first, or \], meaning itself.
+  @Rejecting @Mutating private characterClass(r: Reading, at: Int): Node = {
+    negated = accepts(r, "^")
+    // A ] first is the character, not the end.
+    first = if (looking(r, ']')) {
+      next(r)
+      [CharRange(']', ']')]
+    } else []
+    ranges = classItems(r, at, first)
+    if (ranges.isEmpty()) reject(at, "[] matches nothing; write \\[\\] for the brackets") else Unit
+    CharacterClass(ranges, negated)
+  }
+
+  @Rejecting @Mutating private classItems(r: Reading, at: Int, found: List<CharRange>): List<CharRange> =
+    if (atEnd(r)) reject(at, "this [ is never closed")
+    else if (accepts(r, "]")) found
+    else classItems(r, at, found + classItem(r))
+
+  // One item of a class: a character, a range of them, or a class an escape names, as \d.
+  @Rejecting @Mutating private classItem(r: Reading): List<CharRange> = {
+    at = r.index
+    low = classCharacter(r)
+    when (low) {
+      CharacterClass(ranges, false) -> ranges
+      CharacterClass(_, true) -> reject(at, "a negated class, as \\D, can't be in a class yet; use [^...]")
+      Literal(c) ->
+        // A - last, or before the ], is itself.
+        if (looking(r, '-') && r.index + 1 < r.chars.size && r.chars.get(r.index + 1) != ']') {
+          next(r)
+          when (classCharacter(r)) {
+            Literal(high) -> if (high < c) reject(at, "$c-$high goes backwards") else [CharRange(c, high)]
+            _ -> reject(at, "a range ends at a character, not a class")
+          }
+        } else [CharRange(c, c)]
+      _ -> reject(at, "this means nothing in a class")
+    }
+  }
+
+  @Rejecting @Mutating private classCharacter(r: Reading): Node = {
+    at = r.index
+    c = next(r)
+    if (c == '\\') escape(r, at, true) else Literal(c)
+  }
+}

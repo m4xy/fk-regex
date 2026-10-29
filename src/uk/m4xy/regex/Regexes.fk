@@ -1,0 +1,125 @@
+import fckt.collections.Array
+import fckt.collections.Arrays.*
+import fckt.effects.Fail
+
+// Regular expressions: compiling a pattern, and finding, replacing and splitting by it. Characters
+// are code points, so an index is one, and . matches one.
+//
+//   digits = "[0-9]+".toRegex()
+//   digits.find("order 66")                       // Some(Match("66", 6, 8, []))
+//   "(\\w+)@(\\w+)".toRegex().replace("ada@home", "$2:$1")   // "home:ada"
+module Regexes {
+  // The pattern, compiled, or why it can't be.
+  regex(pattern: String): Result<Regex, RegexError> = Syntax.parse(pattern).map { p ->
+    whole = Pattern(Sequence([p.node, Assert(TextEnd)]), p.groups, p.ignoreCase)
+    Regex(pattern, Compiler.compile(p), Compiler.compile(whole))
+  }
+
+  // The pattern, compiled; failing, with why, if it can't be, as for a pattern written in the code.
+  @Fail String.toRegex(): Regex = when (regex(this)) {
+    Ok(r) -> r
+    Error(e) -> fail("${e.message}, at ${e.at} in /${this}/")
+  }
+
+  // Whether the pattern matches all of the text.
+  Regex.matches(text: String): Boolean = Machine.run(this.whole, characters(text), 0, true).isSome()
+
+  // Whether the pattern matches anywhere in the text.
+  Regex.containsMatchIn(text: String): Boolean = this.find(text).isSome()
+
+  // The first match in the text at or after the index.
+  Regex.find(text: String, from: Int = 0): Option<Match> = {
+    chars = characters(text)
+    matchFrom(this, chars, from)
+  }
+
+  // Each match in the text, in order, none overlapping: after an empty match, the next is looked
+  // for a character on.
+  Regex.findAll(text: String): List<Match> = {
+    chars = characters(text)
+    allFrom(this, chars, 0)
+  }
+
+  // The text, with each match replaced: in the replacement, $0 is the whole match, $1 to $9 or ${12}
+  // a group's, empty if it took no part, and $$ a $.
+  Regex.replace(text: String, replacement: String): String = this.replaceWith(text) { m -> expanded(replacement, m) }
+
+  // The text, with each match replaced by what the function makes of it.
+  Regex.replaceWith(text: String, transform: (Match) -> String): String = {
+    chars = characters(text)
+    matches = allFrom(this, chars, 0)
+    (pieces, last) = matches.fold(([], 0)) { acc, m ->
+      (done, at) = acc
+      (done + [slice(chars, at, m.start), transform(m)], m.end)
+    }
+    (pieces + [slice(chars, last, chars.size)]).joinToString("")
+  }
+
+  // The text, in the pieces between matches.
+  Regex.split(text: String): List<String> = {
+    chars = characters(text)
+    matches = allFrom(this, chars, 0).filter { m -> m.end > m.start }
+    (pieces, last) = matches.fold(([], 0)) { acc, m ->
+      (done, at) = acc
+      (done + [slice(chars, at, m.start)], m.end)
+    }
+    pieces + [slice(chars, last, chars.size)]
+  }
+
+  // What the group, numbered from 1, matched, if it took part; 0 is the whole match.
+  Match.group(n: Int): Option<String> = if (n == 0) Some(this.value) else this.groups.getOrNone(n - 1).flatMap { it }
+
+  // ---- Matching ----
+
+  private characters(text: String): Array<Char> = text.toList().toArray()
+
+  private matchFrom(r: Regex, chars: Array<Char>, from: Int): Option<Match> =
+    if (from > chars.size) None
+    else Machine.run(r.search, chars, from, false).map { slots -> matchOf(chars, slots) }
+
+  private allFrom(r: Regex, chars: Array<Char>, from: Int): List<Match> = when (matchFrom(r, chars, from)) {
+    None -> []
+    Some(m) -> [m, *allFrom(r, chars, if (m.end > m.start) m.end else m.end + 1)]
+  }
+
+  // A match, from where its slots say each group starts and ends.
+  private matchOf(chars: Array<Char>, slots: List<Option<Int>>): Match = {
+    spans = slots.chunked(2).map { pair ->
+      when (pair) {
+        [Some(start), Some(end)] -> Some((start, end))
+        _ -> None
+      }
+    }
+    (start, end) = spans.firstOrNone().flatMap { it }.getOrElse((0, 0))
+    Match(slice(chars, start, end), start, end, spans.drop(1).map { span -> span.map { s, e -> slice(chars, s, e) } })
+  }
+
+  // The characters from start up to end, as text.
+  private slice(chars: Array<Char>, start: Int, end: Int): String =
+    if (start >= end) "" else indexes(start, end).map { i -> chars.get(i).toString() }.joinToString("")
+
+  private indexes(from: Int, until: Int): List<Int> = if (from >= until) [] else [from, *indexes(from + 1, until)]
+
+  // ---- Replacing ----
+
+  // The replacement, with $n, ${n} and $$ in it replaced.
+  private expanded(replacement: String, m: Match): String = expandFrom(replacement.toList(), m, "")
+
+  private expandFrom(chars: List<Char>, m: Match, done: String): String = when (chars) {
+    [] -> done
+    ['$', '$', *rest] -> expandFrom(rest, m, done + "$")
+    ['$', '{', *rest] -> {
+      digits = rest.takeWhile { it.isDigit() }
+      after = rest.drop(digits.size)
+      when (after) {
+        ['}', *more] if digits.isNotEmpty() -> expandFrom(more, m, done + groupText(m, digits))
+        _ -> expandFrom(rest, m, done + "\${")
+      }
+    }
+    ['$', d, *rest] if d.isDigit() -> expandFrom(rest, m, done + groupText(m, [d]))
+    [c, *rest] -> expandFrom(rest, m, done + c.toString())
+  }
+
+  private groupText(m: Match, digits: List<Char>): String =
+    m.group(digits.fold(0) { n, d -> n * 10 + (d.code - '0'.code) }).getOrElse("")
+}

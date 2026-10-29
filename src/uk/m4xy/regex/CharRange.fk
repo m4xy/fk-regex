@@ -1,0 +1,2 @@
+// The characters from first to last, both included, by code point: a-z.
+type CharRange(first: Char, last: Char)

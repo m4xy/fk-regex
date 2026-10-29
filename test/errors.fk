@@ -1,0 +1,35 @@
+import uk.m4xy.fktests.api.Test
+import uk.m4xy.regex.*
+import uk.m4xy.regex.Regexes.*
+import fckt.effects.Failure.*
+
+// What isn't a pattern, and why.
+
+why(pattern: String): Option<String> = when (regex(pattern)) {
+  Ok(_) -> None
+  Error(e) -> Some("${e.at}: ${e.message}")
+}
+
+@Test unclosedGroupsAndClasses() = {
+  assertEquals(Some("0: this ( is never closed"), why("(ab"))
+  assertEquals(Some("0: this [ is never closed"), why("[ab"))
+  assertEquals(Some("2: ')' isn't matched by anything before it"), why("ab)"))
+}
+
+@Test repeatsNeedSomethingToRepeat() = {
+  assertEquals(Some("0: '*' has nothing before it to repeat"), why("*a"))
+  assertEquals(Some("2: '+' repeats a repeat; group it first, as in (x*)+"), why("a*+"))
+  assertEquals(Some("0: an anchor matches no characters, so it can't be repeated"), why("^*"))
+}
+
+@Test badRangesAndEscapes() = {
+  assertEquals(Some("1: z-a goes backwards"), why("[z-a]"))
+  assertEquals(Some("0: \\q means nothing here; write q alone for the letter"), why("\\q"))
+  assertEquals(Some("0: a pattern can't end with \\"), why("\\"))
+  assertEquals(Some("1: {3,1} wants at least 3 but at most 1"), why("a{3,1}"))
+}
+
+@Test aBraceThatIsntACountIsABrace() = assert(r("a{b").matches("a{b"))
+
+@Test aPatternInTheCodeFailsWithWhy() =
+  assertEquals(Error("this ( is never closed, at 0 in /(/"), attempt { "(".toRegex() })

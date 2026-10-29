@@ -1,0 +1,87 @@
+import fckt.collections.Arrays.*
+
+// Compiling a pattern into instructions for the matching machine, as Thompson's construction does:
+// a choice and each repeat are splits, which the machine follows both ways at once.
+module Compiler {
+  // The pattern's program, the whole match being group 0, saved around it.
+  compile(pattern: Pattern): Program = {
+    body = code(pattern.node, 1)
+    instructions = [Save(0)] + body + [Save(1), Succeed]
+    Program(instructions.toArray(), 2 * (pattern.groups + 1), pattern.ignoreCase)
+  }
+
+  // The instructions that match the node, the first of them at start.
+  code(node: Node, start: Int): List<Instruction> = when (node) {
+    Empty -> []
+    Literal(c) -> [Take(Exactly(c))]
+    AnyCharacter -> [Take(AnyButNewline)]
+    CharacterClass(ranges, negated) -> [Take(InRanges(ranges, negated))]
+    Assert(assertion) -> [Check(assertion)]
+    Group(None, inside) -> code(inside, start)
+    Group(Some(n), inside) -> [Save(2 * n)] + code(inside, start + 1) + [Save(2 * n + 1)]
+    Sequence(nodes) -> sequenceCode(nodes, start)
+    Choice(alternatives) -> choiceCode(alternatives, start)
+    Repeat(inside, min, max, greedy) -> repeatCode(inside, min, max, greedy, start)
+  }
+
+  private sequenceCode(nodes: List<Node>, start: Int): List<Instruction> = when (nodes) {
+    [] -> []
+    [first, *rest] -> {
+      firstCode = code(first, start)
+      firstCode + sequenceCode(rest, start + firstCode.size)
+    }
+  }
+
+  // x|y|z: split to x or the rest; after x, jump past the rest.
+  private choiceCode(alternatives: List<Node>, start: Int): List<Instruction> = when (alternatives) {
+    [] -> []
+    [only] -> code(only, start)
+    [first, *rest] -> {
+      firstCode = code(first, start + 1)
+      restStart = start + 1 + firstCode.size + 1
+      restCode = choiceCode(rest, restStart)
+      [Split(start + 1, restStart)] + firstCode + [Jump(restStart + restCode.size)] + restCode
+    }
+  }
+
+  // x{min,max}: x min times, then, up to max, x optionally each time more; or, without a max, x as
+  // many times more as it can.
+  private repeatCode(inside: Node, min: Int, max: Option<Int>, greedy: Boolean, start: Int): List<Instruction> = {
+    required = copies(inside, min, start)
+    afterRequired = start + required.size
+    more = when (max) {
+      Some(m) -> optionals(inside, m - min, greedy, afterRequired)
+      None -> star(inside, greedy, afterRequired)
+    }
+    required + more
+  }
+
+  // x, the count's times, each after the last.
+  private copies(inside: Node, count: Int, start: Int): List<Instruction> =
+    if (count <= 0) []
+    else {
+      one = code(inside, start)
+      one + copies(inside, count - 1, start + one.size)
+    }
+
+  // x?, the count's times: each split to x, or past them all.
+  private optionals(inside: Node, count: Int, greedy: Boolean, start: Int): List<Instruction> =
+    if (count <= 0) []
+    else {
+      one = code(inside, start + 1)
+      rest = optionals(inside, count - 1, greedy, start + 1 + one.size)
+      end = start + 1 + one.size + rest.size
+      [preferring(greedy, start + 1, end)] + one + rest
+    }
+
+  // x*: split to x, then back, or past.
+  private star(inside: Node, greedy: Boolean, start: Int): List<Instruction> = {
+    one = code(inside, start + 1)
+    end = start + 1 + one.size + 1
+    [preferring(greedy, start + 1, end)] + one + [Jump(start)]
+  }
+
+  // A split to go on, or to leave: greedy prefers going on, lazy leaving.
+  private preferring(greedy: Boolean, goOn: Int, leave: Int): Instruction =
+    if (greedy) Split(goOn, leave) else Split(leave, goOn)
+}

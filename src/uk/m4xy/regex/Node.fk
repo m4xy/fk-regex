@@ -1,0 +1,21 @@
+// A pattern, read: what it matches, before it's compiled.
+type Node {
+  // Nothing: the empty pattern, or one side of a|.
+  Empty,
+  Literal(c: Char),
+  // .: any character but a line break.
+  AnyCharacter,
+  // [a-z_], or [^0-9] where negated: a character in, or not in, any of the ranges.
+  CharacterClass(ranges: List<CharRange>, negated: Boolean),
+  Assert(assertion: Assertion),
+  // (x), whose match is captured, numbered from 1 in the order the groups open; or (?:x), which
+  // only groups, with no number.
+  Group(number: Option<Int>, node: Node),
+  // xyz: each in turn.
+  Sequence(nodes: List<Node>),
+  // x|y|z: the first of them that leads to a match.
+  Choice(alternatives: List<Node>),
+  // x*, x+, x?, x{n,m}: at least min times, at most max, if there's a most; as many as can be,
+  // greedy, or as few, lazy, x*?.
+  Repeat(node: Node, min: Int, max: Option<Int>, greedy: Boolean),
+}

@@ -1,0 +1,7 @@
+// What a character must be for an instruction to take it.
+type CharTest {
+  Exactly(c: Char),
+  AnyButNewline,
+  // In one of the ranges, or, negated, in none.
+  InRanges(ranges: List<CharRange>, negated: Boolean),
+}

@@ -1,0 +1,3 @@
+// A pattern, read: what it matches, how many groups it numbers, and whether it ignores the case of
+// the letters A to Z, as (?i) at its start says.
+type Pattern(node: Node, groups: Int, ignoreCase: Boolean)

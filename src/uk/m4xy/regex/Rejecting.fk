@@ -1,0 +1,4 @@
+// Giving up on a pattern: reject(at, message) never returns, and reading it gives a RegexError.
+effect Rejecting {
+  reject(at: Int, message: String): Nothing
+}

@@ -1,0 +1,123 @@
+import uk.m4xy.fktests.api.Test
+import uk.m4xy.regex.*
+import uk.m4xy.regex.Regexes.*
+import fckt.effects.Fail
+
+// What patterns match, and what they find.
+
+@Test literalsMatchThemselves() = {
+  assert(r("abc").matches("abc"))
+  assert(!r("abc").matches("abcd"))
+  assert(r("abc").containsMatchIn("xxabcxx"))
+  assertEquals(Some("abc"), found("abc", "xxabcxx"))
+}
+
+@Test dotIsAnyCharacterButALineBreak() = {
+  assert(r("a.c").matches("abc"))
+  assert(r("a.c").matches("a€c"))
+  assert(!r("a.c").matches("a\nc"))
+}
+
+@Test repeatsAreGreedyUnlessLazy() = {
+  assertEquals(Some("<a><b>"), found("<.*>", "<a><b>"))
+  assertEquals(Some("<a>"), found("<.*?>", "<a><b>"))
+  assertEquals(Some("aaa"), found("a+", "baaab"))
+  assertEquals(Some(""), found("a*", "baaab"))
+  assertEquals(Some("aa"), found("a{2}", "aaaa"))
+  assertEquals(Some("aaa"), found("a{2,3}", "aaaa"))
+  assertEquals(Some("aaaa"), found("a{2,}", "aaaa"))
+  assert(!r("a{2,3}").matches("a"))
+  assert(r("colou?r").matches("color") && r("colou?r").matches("colour"))
+}
+
+@Test choicesPreferTheFirstThatMatches() = {
+  assertEquals(Some("ab"), found("ab|abc", "abc"))
+  assertEquals(Some("abc"), found("abc|ab", "abc"))
+  assert(r("cat|dog|bird").matches("dog"))
+  assert(r("(?:a|b)+").matches("abba"))
+}
+
+@Test classes() = {
+  assert(r("[a-c]+").matches("abcabc"))
+  assert(!r("[a-c]+").matches("abcd"))
+  assert(r("[^0-9]+").matches("abc"))
+  assert(!r("[^0-9]").matches("5"))
+  assert(r("\\d{3}-\\d{4}").matches("555-1234"))
+  assert(r("\\w+").matches("snake_case_42"))
+  assert(r("\\s+").matches(" \t\n"))
+  assert(r("[\\d.]+").matches("3.14"))
+  assert(r("[]a]+").matches("]a]"))
+  assert(r("[a-]+").matches("a-a"))
+}
+
+@Test anchorsAndBoundaries() = {
+  assertEquals(None, found("^b", "ab"))
+  assertEquals(Some("a"), found("^a", "ab"))
+  assertEquals(Some("b"), found("b$", "ab"))
+  assertEquals(Some("cat"), found("\\bcat\\b", "a cat sat"))
+  assertEquals(None, found("\\bcat\\b", "concatenate"))
+  assertEquals(Some("cat"), found("\\Bcat\\B", "concatenate"))
+}
+
+@Test escapes() = {
+  assert(r("a\\.b").matches("a.b"))
+  assert(!r("a\\.b").matches("axb"))
+  assert(r("\\(\\)").matches("()"))
+  assert(r("\\u{1F600}").matches("😀"))
+  assert(r("a\\tb").matches("a\tb"))
+}
+
+@Test caseCanBeIgnored() = {
+  assert(r("(?i)hello").matches("HeLLo"))
+  assert(r("(?i)[a-z]+").matches("MiXeD"))
+  assert(!r("hello").matches("HELLO"))
+}
+
+@Test @Fail groupsCaptureWhatTheyMatch() = when (r("(\\w+)@(\\w+)\\.com").find("mail ada@example.com now")) {
+  Some(m) -> {
+    assertEquals("ada@example.com", m.value)
+    assertEquals(5, m.start)
+    assertEquals(20, m.end)
+    assertEquals(Some("ada"), m.group(1))
+    assertEquals(Some("example"), m.group(2))
+    assertEquals(None, m.group(3))
+  }
+  None -> fail("no match")
+}
+
+@Test @Fail aGroupThatTakesNoPartCapturesNothing() = when (r("(a)|(b)").find("b")) {
+  Some(m) -> {
+    assertEquals(None, m.group(1))
+    assertEquals(Some("b"), m.group(2))
+  }
+  None -> fail("no match")
+}
+
+@Test aRepeatedGroupCapturesItsLastTime() = assertEquals(Some("c"), r("(\\w)+").find("abc").flatMap { it.group(1) })
+
+@Test findingAll() = {
+  assertEquals(["1", "22", "333"], r("\\d+").findAll("a1b22c333").map { it.value })
+  assertEquals([0, 1, 2, 3], r("x*").findAll("abc").map { it.start })
+}
+
+@Test replacing() = {
+  assertEquals("home:ada", r("(\\w+)@(\\w+)").replace("ada@home", "$2:$1"))
+  assertEquals("a-b-c", r("\\s+").replace("a  b \t c", "-"))
+  assertEquals("[1] [22]", r("\\d+").replaceWith("1 22") { m -> "[${m.value}]" })
+  assertEquals("$5", r("\\d").replace("5", "$$$0"))
+  assertEquals("j", r("(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)").replace("abcdefghij", "\${10}"))
+}
+
+@Test splitting() = {
+  assertEquals(["a", "b", "c"], r(",\\s*").split("a, b,c"))
+  assertEquals(["a", "b", ""], r(",").split("a,b,"))
+  assertEquals(["abc"], r(",").split("abc"))
+}
+
+// A pattern that makes a backtracking matcher try every way of splitting the text is matched here in
+// time linear in the text: this would take a backtracking one longer than a test runs.
+@Test noPatternBacktracksForever() = {
+  text = "a".repeat(40)
+  assert(!r("(a*)*b").containsMatchIn(text))
+  assert(!r("(a|aa)+c").matches(text))
+}

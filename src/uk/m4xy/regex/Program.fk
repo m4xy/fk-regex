@@ -1,0 +1,5 @@
+import fckt.collections.Array
+
+// A pattern, compiled: its instructions, with the first at 0; how many slots its matches note, two
+// for each group, the whole match being group 0; and whether it ignores the case of A to Z.
+type Program(instructions: Array<Instruction>, slots: Int, ignoreCase: Boolean)

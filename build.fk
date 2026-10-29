@@ -1,0 +1,8 @@
+// fk-regex: regular expressions for fckt, matched in time linear in the text, whatever the pattern.
+// kiln publishLocal publishes it.
+import uk.m4xy.kiln.fckt.Fckt
+import uk.m4xy.fktests.kiln.*
+
+project = Project(name = "fk-regex", group = "uk.m4xy", version = "0.1.0")
+
+plugins = [Fckt(), FkTests()]

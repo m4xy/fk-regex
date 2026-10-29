@@ -1,0 +1,2 @@
+// Why a pattern can't be read, and where: the index of the character it went wrong at.
+type RegexError(at: Int, message: String)
