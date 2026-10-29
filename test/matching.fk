@@ -121,3 +121,9 @@ import fckt.effects.Fail
   assert(!r("(a*)*b").containsMatchIn(text))
   assert(!r("(a|aa)+c").matches(text))
 }
+
+@Test escapedTextMatchesItself() = {
+  text = "a.b*(c)[d]{1}|^\$\\"
+  assert(r(escape(text)).matches(text))
+  assert(!r(escape("a.b")).matches("axb"))
+}

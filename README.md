@@ -43,7 +43,7 @@ is an error, not the letter, so a mistyped escape doesn't quietly match somethin
 
 ## Matching
 
-`Regex.find(text, from)`, `findAll`, `matches`, `containsMatchIn`, `replace`, `replaceWith` and
+`Regexes.escape(text)` is a pattern that matches the text as it's written. `Regex.find(text, from)`, `findAll`, `matches`, `containsMatchIn`, `replace`, `replaceWith` and
 `split`. A `Match` has the text matched, where it `start`s and `end`s, and `group(n)`: what group `n`
 matched, if it took part, `0` being the whole match. Indexes count characters, code points, as
 fckt's `Char` does.

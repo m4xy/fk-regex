@@ -21,6 +21,10 @@ module Regexes {
     Error(e) -> fail("${e.message}, at ${e.at} in /${this}/")
   }
 
+  // A pattern that matches the text as it's written: each character that means something in a
+  // pattern, as . and (, escaped.
+  escape(text: String): String = text.toList().map { c -> if ("\\.+*?()[]{}|^\$".contains(c.toString())) "\\$c" else c.toString() }.joinToString("")
+
   // Whether the pattern matches all of the text.
   Regex.matches(text: String): Boolean = Machine.run(this.whole, characters(text), 0, true).isSome()
 
