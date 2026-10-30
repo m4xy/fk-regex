@@ -46,7 +46,13 @@ module Machine {
     }
   }
 
-  @Mutating private add(threads: Threads, input: Input, at: Int, slots: List<Option<Int>>, index: Int): Unit =
+  @Mutating private add(
+    threads: Threads,
+    input: Input,
+    at: Int,
+    slots: List<Option<Int>>,
+    index: Int,
+  ): Unit =
     if (threads.reached.get(at)) Unit
     else {
       threads.reached.set(at, true)

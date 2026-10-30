@@ -72,7 +72,12 @@ module Regexes {
       }
     }
     (start, end) = spans.firstOrNone().flatMap { it }.getOrElse((0, 0))
-    Match(slice(chars, start, end), start, end, spans.drop(1).map { span -> span.map { s, e -> slice(chars, s, e) } })
+    Match(
+      slice(chars, start, end),
+      start,
+      end,
+      spans.drop(1).map { span -> span.map { s, e -> slice(chars, s, e) } },
+    )
   }
 
   private slice(chars: Array<Char>, start: Int, end: Int): String =
