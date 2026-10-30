@@ -71,7 +71,9 @@ import fckt.effects.Fail
   assert(!r("hello").matches("HELLO"))
 }
 
-@Test @Fail groupsCaptureWhatTheyMatch() = when (r("(\\w+)@(\\w+)\\.com").find("mail ada@example.com now")) {
+@Test
+@Fail
+groupsCaptureWhatTheyMatch() = when (r("(\\w+)@(\\w+)\\.com").find("mail ada@example.com now")) {
   Some(m) -> {
     assertEquals("ada@example.com", m.value)
     assertEquals(5, m.start)
@@ -91,7 +93,10 @@ import fckt.effects.Fail
   None -> fail("no match")
 }
 
-@Test aRepeatedGroupCapturesItsLastTime() = assertEquals(Some("c"), r("(\\w)+").find("abc").flatMap { it.group(1) })
+@Test aRepeatedGroupCapturesItsLastTime() = assertEquals(
+  Some("c"),
+  r("(\\w)+").find("abc").flatMap { it.group(1) },
+)
 
 @Test findingAll() = {
   assertEquals(["1", "22", "333"], r("\\d+").findAll("a1b22c333").map { it.value })

@@ -13,7 +13,9 @@ module Regexes {
     Error(e) -> fail("${e.message}, at ${e.at} in /${this}/")
   }
 
-  escape(text: String): String = text.toList().map { c -> if ("\\.+*?()[]{}|^\$".contains(c.toString())) "\\$c" else c.toString() }.joinToString("")
+  escape(
+    text: String,
+  ): String = text.toList().map { c -> if ("\\.+*?()[]{}|^\$".contains(c.toString())) "\\$c" else c.toString() }.joinToString("")
 
   Regex.matches(text: String): Boolean = Machine.run(this.whole, characters(text), 0, true).isSome()
 
@@ -29,7 +31,10 @@ module Regexes {
     allFrom(this, chars, 0)
   }
 
-  Regex.replace(text: String, replacement: String): String = this.replaceWith(text) { m -> expanded(replacement, m) }
+  Regex.replace(
+    text: String,
+    replacement: String,
+  ): String = this.replaceWith(text) { m -> expanded(replacement, m) }
 
   Regex.replaceWith(text: String, transform: (Match) -> String): String = {
     chars = characters(text)
@@ -51,7 +56,9 @@ module Regexes {
     pieces + [slice(chars, last, chars.size)]
   }
 
-  Match.group(n: Int): Option<String> = if (n == 0) Some(this.value) else this.groups.getOrNone(n - 1).flatMap { it }
+  Match.group(
+    n: Int,
+  ): Option<String> = if (n == 0) Some(this.value) else this.groups.getOrNone(n - 1).flatMap { it }
 
   private characters(text: String): Array<Char> = text.toList().toArray()
 
@@ -59,7 +66,11 @@ module Regexes {
     if (from > chars.size) None
     else Machine.run(r.search, chars, from, false).map { slots -> matchOf(chars, slots) }
 
-  private allFrom(r: Regex, chars: Array<Char>, from: Int): List<Match> = when (matchFrom(r, chars, from)) {
+  private allFrom(
+    r: Regex,
+    chars: Array<Char>,
+    from: Int,
+  ): List<Match> = when (matchFrom(r, chars, from)) {
     None -> []
     Some(m) -> [m, *allFrom(r, chars, if (m.end > m.start) m.end else m.end + 1)]
   }

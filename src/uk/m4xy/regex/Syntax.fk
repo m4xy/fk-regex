@@ -7,7 +7,10 @@ module Syntax {
     Rejecting(reject = (at, message, _) -> Error(RegexError(at, message))) {
       ignoreCase = accepts(r, "(?i)")
       node = choice(r)
-      if (r.index < r.chars.size) reject(r.index, "'${current(r)}' isn't matched by anything before it")
+      if (r.index < r.chars.size) reject(
+        r.index,
+        "'${current(r)}' isn't matched by anything before it",
+      )
       else Ok(Pattern(node, r.groups, ignoreCase))
     }
   }
@@ -111,7 +114,9 @@ module Syntax {
         else if (accepts(r, ",}")) Some((n, None))
         else if (accepts(r, ",")) when (number(r)) {
           Some(m) if accepts(r, "}") ->
-            if (m < n) reject(start, "{$n,$m} wants at least $n but at most $m") else Some((n, Some(m)))
+            if (m < n) reject(start, "{$n,$m} wants at least $n but at most $m") else Some(
+              (n, Some(m)),
+            )
           _ -> None
         }
         else None
@@ -148,7 +153,10 @@ module Syntax {
 
   @Rejecting @Mutating private group(r: Reading, at: Int): Node = {
     number = if (accepts(r, "?:")) None else {
-      if (looking(r, '?')) reject(r.index, "only (?:...) and (?i) at the start are understood after (?") else Unit
+      if (looking(r, '?')) reject(
+        r.index,
+        "only (?:...) and (?i) at the start are understood after (?",
+      ) else Unit
       r.groups = r.groups + 1
       Some(r.groups)
     }
@@ -177,13 +185,19 @@ module Syntax {
       '0' -> Literal(0.toChar())
       'u' -> Literal(codePoint(r, at))
       _ ->
-        if (c.isLetterOrDigit()) reject(at, "\\$c means nothing here; write $c alone for the letter")
+        if (c.isLetterOrDigit()) reject(
+          at,
+          "\\$c means nothing here; write $c alone for the letter",
+        )
         else Literal(c)
     }
   }
 
   @Rejecting @Mutating private codePoint(r: Reading, at: Int): Char = {
-    if (!accepts(r, "{")) reject(at, "\\u is followed by a code point in braces, as in \\u{1F600}") else Unit
+    if (!accepts(r, "{")) reject(
+      at,
+      "\\u is followed by a code point in braces, as in \\u{1F600}",
+    ) else Unit
     value = hexDigits(r, None)
     if (!accepts(r, "}")) reject(at, "\\u{...} holds only hexadecimal digits") else Unit
     when (value) {
@@ -209,7 +223,12 @@ module Syntax {
     else None
 
   digitRanges: List<CharRange> = [CharRange('0', '9')]
-  wordRanges: List<CharRange> = [CharRange('a', 'z'), CharRange('A', 'Z'), CharRange('0', '9'), CharRange('_', '_')]
+  wordRanges: List<CharRange> = [
+    CharRange('a', 'z'),
+    CharRange('A', 'Z'),
+    CharRange('0', '9'),
+    CharRange('_', '_'),
+  ]
   spaceRanges: List<CharRange> = [CharRange(' ', ' '), CharRange('\t', '\r')]
 
   @Rejecting @Mutating private characterClass(r: Reading, at: Int): Node = {
@@ -223,7 +242,11 @@ module Syntax {
     CharacterClass(ranges, negated)
   }
 
-  @Rejecting @Mutating private classItems(r: Reading, at: Int, found: List<CharRange>): List<CharRange> =
+  @Rejecting @Mutating private classItems(
+    r: Reading,
+    at: Int,
+    found: List<CharRange>,
+  ): List<CharRange> =
     if (atEnd(r)) reject(at, "this [ is never closed")
     else if (accepts(r, "]")) found
     else classItems(r, at, found + classItem(r))
@@ -233,12 +256,17 @@ module Syntax {
     low = classCharacter(r)
     when (low) {
       CharacterClass(ranges, false) -> ranges
-      CharacterClass(_, true) -> reject(at, "a negated class, as \\D, can't be in a class yet; use [^...]")
+      CharacterClass(_, true) -> reject(
+        at,
+        "a negated class, as \\D, can't be in a class yet; use [^...]",
+      )
       Literal(c) ->
         if (looking(r, '-') && r.index + 1 < r.chars.size && r.chars.get(r.index + 1) != ']') {
           next(r)
           when (classCharacter(r)) {
-            Literal(high) -> if (high < c) reject(at, "$c-$high goes backwards") else [CharRange(c, high)]
+            Literal(high) -> if (high < c) reject(at, "$c-$high goes backwards") else [
+              CharRange(c, high),
+            ]
             _ -> reject(at, "a range ends at a character, not a class")
           }
         } else [CharRange(c, c)]

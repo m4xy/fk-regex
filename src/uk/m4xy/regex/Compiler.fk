@@ -28,7 +28,10 @@ module Compiler {
     }
   }
 
-  private choiceCode(alternatives: List<Node>, start: Int): List<Instruction> = when (alternatives) {
+  private choiceCode(
+    alternatives: List<Node>,
+    start: Int,
+  ): List<Instruction> = when (alternatives) {
     [] -> []
     [only] -> code(only, start)
     [first, *rest] -> {
@@ -39,7 +42,13 @@ module Compiler {
     }
   }
 
-  private repeatCode(inside: Node, min: Int, max: Option<Int>, greedy: Boolean, start: Int): List<Instruction> = {
+  private repeatCode(
+    inside: Node,
+    min: Int,
+    max: Option<Int>,
+    greedy: Boolean,
+    start: Int,
+  ): List<Instruction> = {
     required = copies(inside, min, start)
     afterRequired = start + required.size
     more = when (max) {

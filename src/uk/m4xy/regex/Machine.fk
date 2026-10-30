@@ -2,7 +2,12 @@ import fckt.collections.Array
 import fckt.collections.Arrays.*
 
 module Machine {
-  run(program: Program, text: Array<Char>, from: Int, anchored: Boolean): Option<List<Option<Int>>> = {
+  run(
+    program: Program,
+    text: Array<Char>,
+    from: Int,
+    anchored: Boolean,
+  ): Option<List<Option<Int>>> = {
     state = Running([], None)
     stepFrom(Input(program, text), state, from, from, anchored)
     state.matched
@@ -16,7 +21,13 @@ module Machine {
 
   private type Running(var threads: List<Thread>, var matched: Option<List<Option<Int>>>)
 
-  @Mutating private stepFrom(input: Input, state: Running, from: Int, index: Int, anchored: Boolean): Unit = {
+  @Mutating private stepFrom(
+    input: Input,
+    state: Running,
+    from: Int,
+    index: Int,
+    anchored: Boolean,
+  ): Unit = {
     current = Threads(state.threads, arrayOf(input.program.instructions.size, false))
     current.threads.forEach { t -> current.reached.set(t.at, true) }
     if (state.matched.isNone() && (!anchored || index == from)) {
@@ -30,7 +41,13 @@ module Machine {
     }
   }
 
-  @Mutating private stepThreads(input: Input, state: Running, threads: List<Thread>, next: Threads, index: Int): Unit = when (threads) {
+  @Mutating private stepThreads(
+    input: Input,
+    state: Running,
+    threads: List<Thread>,
+    next: Threads,
+    index: Int,
+  ): Unit = when (threads) {
     [] -> Unit
     [t, *rest] -> when (input.program.instructions.get(t.at)) {
       Succeed -> {
@@ -62,8 +79,20 @@ module Machine {
           add(threads, input, first, slots, index)
           add(threads, input, second, slots, index)
         }
-        Save(slot) -> add(threads, input, at + 1, slots.mapIndexed { i, s -> if (i == slot) Some(index) else s }, index)
-        Check(assertion) -> if (holds(assertion, input.text, index)) add(threads, input, at + 1, slots, index) else Unit
+        Save(slot) -> add(
+          threads,
+          input,
+          at + 1,
+          slots.mapIndexed { i, s -> if (i == slot) Some(index) else s },
+          index,
+        )
+        Check(assertion) -> if (holds(assertion, input.text, index)) add(
+          threads,
+          input,
+          at + 1,
+          slots,
+          index,
+        ) else Unit
         _ -> {
           threads.threads = threads.threads + [Thread(at, slots)]
         }
@@ -72,18 +101,26 @@ module Machine {
 
   private emptySlots(program: Program): List<Option<Int>> = repeated(program.slots)
 
-  private repeated(count: Int): List<Option<Int>> = if (count <= 0) [] else [None, *repeated(count - 1)]
+  private repeated(
+    count: Int,
+  ): List<Option<Int>> = if (count <= 0) [] else [None, *repeated(count - 1)]
 
   passes(test: CharTest, c: Char, ignoreCase: Boolean): Boolean = when (test) {
     Exactly(x) -> c == x || (ignoreCase && c.lowercase() == x.lowercase())
     AnyButNewline -> c != '\n'
     InRanges(ranges, negated) -> {
-      inside = inRanges(ranges, c) || (ignoreCase && (inRanges(ranges, c.lowercase()) || inRanges(ranges, c.uppercase())))
+      inside = inRanges(
+        ranges,
+        c,
+      ) || (ignoreCase && (inRanges(ranges, c.lowercase()) || inRanges(ranges, c.uppercase())))
       inside != negated
     }
   }
 
-  private inRanges(ranges: List<CharRange>, c: Char): Boolean = ranges.any { r -> c >= r.first && c <= r.last }
+  private inRanges(
+    ranges: List<CharRange>,
+    c: Char,
+  ): Boolean = ranges.any { r -> c >= r.first && c <= r.last }
 
   private holds(assertion: Assertion, text: Array<Char>, index: Int): Boolean = when (assertion) {
     TextStart -> index == 0
@@ -98,5 +135,7 @@ module Machine {
     before != after
   }
 
-  private isWordCharacter(c: Char): Boolean = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+  private isWordCharacter(
+    c: Char,
+  ): Boolean = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
 }
