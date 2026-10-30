@@ -100,9 +100,7 @@ module Regexes {
 
   // The characters from start up to end, as text.
   private slice(chars: Array<Char>, start: Int, end: Int): String =
-    if (start >= end) "" else indexes(start, end).map { i -> chars.get(i).toString() }.joinToString("")
-
-  private indexes(from: Int, until: Int): List<Int> = if (from >= until) [] else [from, *indexes(from + 1, until)]
+    (start..<end).map { i -> chars.get(i).toString() }.joinToString("")
 
   // ---- Replacing ----
 
