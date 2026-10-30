@@ -1,4 +1,1 @@
-// Where a pattern matched a text: the text matched, where it starts and ends, as indexes of
-// characters, code points, the end just past it, and what each group, numbered from 1, matched, if it
-// took part.
 type Match(value: String, start: Int, end: Int, groups: List<Option<String>>)

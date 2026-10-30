@@ -1,16 +1,12 @@
 import fckt.collections.Arrays.*
 
-// Compiling a pattern into instructions for the matching machine, as Thompson's construction does:
-// a choice and each repeat are splits, which the machine follows both ways at once.
 module Compiler {
-  // The pattern's program, the whole match being group 0, saved around it.
   compile(pattern: Pattern): Program = {
     body = code(pattern.node, 1)
     instructions = [Save(0)] + body + [Save(1), Succeed]
     Program(instructions.toArray(), 2 * (pattern.groups + 1), pattern.ignoreCase)
   }
 
-  // The instructions that match the node, the first of them at start.
   code(node: Node, start: Int): List<Instruction> = when (node) {
     Empty -> []
     Literal(c) -> [Take(Exactly(c))]
@@ -32,7 +28,6 @@ module Compiler {
     }
   }
 
-  // x|y|z: split to x or the rest; after x, jump past the rest.
   private choiceCode(alternatives: List<Node>, start: Int): List<Instruction> = when (alternatives) {
     [] -> []
     [only] -> code(only, start)
@@ -44,8 +39,6 @@ module Compiler {
     }
   }
 
-  // x{min,max}: x min times, then, up to max, x optionally each time more; or, without a max, x as
-  // many times more as it can.
   private repeatCode(inside: Node, min: Int, max: Option<Int>, greedy: Boolean, start: Int): List<Instruction> = {
     required = copies(inside, min, start)
     afterRequired = start + required.size
@@ -56,7 +49,6 @@ module Compiler {
     required + more
   }
 
-  // x, the count's times, each after the last.
   private copies(inside: Node, count: Int, start: Int): List<Instruction> =
     if (count <= 0) []
     else {
@@ -64,7 +56,6 @@ module Compiler {
       one + copies(inside, count - 1, start + one.size)
     }
 
-  // x?, the count's times: each split to x, or past them all.
   private optionals(inside: Node, count: Int, greedy: Boolean, start: Int): List<Instruction> =
     if (count <= 0) []
     else {
@@ -74,14 +65,12 @@ module Compiler {
       [preferring(greedy, start + 1, end)] + one + rest
     }
 
-  // x*: split to x, then back, or past.
   private star(inside: Node, greedy: Boolean, start: Int): List<Instruction> = {
     one = code(inside, start + 1)
     end = start + 1 + one.size + 1
     [preferring(greedy, start + 1, end)] + one + [Jump(start)]
   }
 
-  // A split to go on, or to leave: greedy prefers going on, lazy leaving.
   private preferring(greedy: Boolean, goOn: Int, leave: Int): Instruction =
     if (greedy) Split(goOn, leave) else Split(leave, goOn)
 }

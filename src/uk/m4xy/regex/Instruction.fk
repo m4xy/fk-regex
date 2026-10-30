@@ -1,14 +1,8 @@
-// One step of a compiled pattern, as the matching machine runs it, at an index into the program.
 type Instruction {
-  // Takes the next character, if it passes the test, and goes on to the next instruction.
   Take(test: CharTest),
-  // Goes on to both, the first preferred: where both lead to a match, the first's is the one found.
   Split(first: Int, second: Int),
   Jump(to: Int),
-  // Notes where in the text this is, in the slot: where a group starts or ends.
   Save(slot: Int),
-  // Goes on only if the text here is as the assertion says.
   Check(assertion: Assertion),
-  // A match.
   Succeed,
 }

@@ -1,39 +1,24 @@
 import fckt.collections.Array
 import fckt.collections.Arrays.*
 
-// Running a program over a text, as Pike's machine does: every way the pattern could match is
-// followed at once, a thread each, one character at a time, so a match is found in time linear in the
-// text whatever the pattern, and no pattern can make it backtrack forever. Threads are kept in order
-// of preference, so the match found is the one a backtracking matcher would find first: the leftmost,
-// and of those the one its choices and repeats prefer.
 module Machine {
-  // Where the slots of the match found start and end, starting at from, or, if it needn't, at the
-  // first index after it that one does; None if there's none.
   run(program: Program, text: Array<Char>, from: Int, anchored: Boolean): Option<List<Option<Int>>> = {
     state = Running([], None)
     stepFrom(Input(program, text), state, from, from, anchored)
     state.matched
   }
 
-  // A way the pattern could be matching: the instruction it's at, and what its slots hold so far.
   private type Thread(at: Int, slots: List<Option<Int>>)
 
-  // The threads at one index of the text, in order of preference, with which instructions have one
-  // already, as two threads at one instruction would go on the same from there, and the first is
-  // preferred.
   private type Threads(var threads: List<Thread>, reached: Array<Boolean>)
 
-  // What's run: the program, over the text.
   private type Input(program: Program, text: Array<Char>)
 
-  // The threads at the current index, and the match found so far: what running changes, held apart
-  // from the program and text, which it only reads, so that a run changes nothing its caller sees.
   private type Running(var threads: List<Thread>, var matched: Option<List<Option<Int>>>)
 
   @Mutating private stepFrom(input: Input, state: Running, from: Int, index: Int, anchored: Boolean): Unit = {
     current = Threads(state.threads, arrayOf(input.program.instructions.size, false))
     current.threads.forEach { t -> current.reached.set(t.at, true) }
-    // A new start, least preferred, until a match is found, or, anchored, only at from.
     if (state.matched.isNone() && (!anchored || index == from)) {
       add(current, input, 0, emptySlots(input.program), index)
     }
@@ -45,8 +30,6 @@ module Machine {
     }
   }
 
-  // Each thread, in order, takes the character at the index, or matches; a match ends the threads
-  // less preferred than it.
   @Mutating private stepThreads(input: Input, state: Running, threads: List<Thread>, next: Threads, index: Int): Unit = when (threads) {
     [] -> Unit
     [t, *rest] -> when (input.program.instructions.get(t.at)) {
@@ -63,8 +46,6 @@ module Machine {
     }
   }
 
-  // Adds a thread at the instruction, following what takes no character there: jumps, splits, saves
-  // and checks; one that takes a character, or matches, is kept to go on.
   @Mutating private add(threads: Threads, input: Input, at: Int, slots: List<Option<Int>>, index: Int): Unit =
     if (threads.reached.get(at)) Unit
     else {
@@ -87,7 +68,6 @@ module Machine {
 
   private repeated(count: Int): List<Option<Int>> = if (count <= 0) [] else [None, *repeated(count - 1)]
 
-  // Whether the character passes the test, A to Z in either case if the case is ignored.
   passes(test: CharTest, c: Char, ignoreCase: Boolean): Boolean = when (test) {
     Exactly(x) -> c == x || (ignoreCase && c.lowercase() == x.lowercase())
     AnyButNewline -> c != '\n'
@@ -99,7 +79,6 @@ module Machine {
 
   private inRanges(ranges: List<CharRange>, c: Char): Boolean = ranges.any { r -> c >= r.first && c <= r.last }
 
-  // Whether the text at the index is as the assertion says.
   private holds(assertion: Assertion, text: Array<Char>, index: Int): Boolean = when (assertion) {
     TextStart -> index == 0
     TextEnd -> index == text.size
@@ -107,13 +86,11 @@ module Machine {
     NotWordBoundary -> !atBoundary(text, index)
   }
 
-  // Whether a word character is on one side of the index and not the other.
   private atBoundary(text: Array<Char>, index: Int): Boolean = {
     before = index > 0 && isWordCharacter(text.get(index - 1))
     after = index < text.size && isWordCharacter(text.get(index))
     before != after
   }
 
-  // A character \w matches.
   private isWordCharacter(c: Char): Boolean = (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
 }

@@ -3,8 +3,6 @@ import uk.m4xy.regex.*
 import uk.m4xy.regex.Regexes.*
 import fckt.effects.Failure.*
 
-// What isn't a pattern, and why.
-
 why(pattern: String): Option<String> = when (regex(pattern)) {
   Ok(_) -> None
   Error(e) -> Some("${e.at}: ${e.message}")

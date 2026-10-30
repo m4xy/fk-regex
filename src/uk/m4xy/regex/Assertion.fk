@@ -1,11 +1,6 @@
-// A place in the text a pattern can require, matching no characters.
 type Assertion {
-  // ^: the start of the text.
   TextStart,
-  // $: the end of the text.
   TextEnd,
-  // \b: between a word character and something else, or the start or end, beside one.
   WordBoundary,
-  // \B: anywhere \b isn't.
   NotWordBoundary,
 }
